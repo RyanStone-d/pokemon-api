@@ -37,7 +37,7 @@
 
 ### 1.4 PokeAPI 給的原始資料長什麼樣
 
-- `GET /pokemon/{id}`：id, name, height（單位是公寸，10 = 1 公尺）, weight（單位是百公克，105 = 10.5 公斤）,
+- `GET /pokemon/{id}`：id, name, height（數字是公尺的 10 倍，17 = 1.7 公尺）, weight（數字是公斤的 10 倍，905 = 90.5 公斤）,
   types[]（slot + type name）, stats[]（stat name + base_stat）, sprites.other.official-artwork.front_default（圖片網址）
 - `GET /pokemon-species/{id}`：generation（例如 generation-i）。世代不在 /pokemon 裡，要多打一次。
 - 這個專案說的「世代」一律指**第一次登場的世代**，一隻只有一個。前端的 Generation 下拉選第一世代，出來的是 1 到 151 號，就是這個意思。不是「哪幾代遊戲裡出現過」。
