@@ -1,0 +1,22 @@
+name: pokemon-api
+
+services:
+  db:
+    image: postgres:17
+    container_name: pokemon-db
+    environment:
+      POSTGRES_USER: pokemon
+      POSTGRES_PASSWORD: pokemon
+      POSTGRES_DB: pokemon
+    ports:
+      - "5433:5432"   # 本機 5433 → 容器 5432，避開你本機已經在跑的 PostgreSQL 18
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokemon -d pokemon"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
