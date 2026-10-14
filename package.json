@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch src/server.ts",
     "db:up": "docker compose up -d --wait db",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait db && npm run db:migrate",
@@ -12,10 +13,14 @@
     "db:psql": "docker compose exec db psql -U pokemon -d pokemon"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^16.4.5",
+    "express": "^5.3.0",
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",

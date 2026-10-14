@@ -86,4 +86,4 @@ ORDER BY p.id;
 -- 答案應該是：18 列
 SELECT *
 FROM types
-WHERE id IN (SELECT type_id FROM pokemon_types)
+WHERE id IN (SELECT type_id FROM pokemon_types);
