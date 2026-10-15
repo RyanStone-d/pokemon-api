@@ -80,6 +80,13 @@ pokemonRouter.get("/pokemon/:id", async (req, res) => {
 });
 
 pokemonRouter.get("/pokemon", async (req, res) => {
+  const page = Number(req.query.page ?? 1);
+  if (!Number.isInteger(page) || page < 1) {
+    res.status(400).json({ error: "page must be a positive integer" });
+    return;
+  }
+
+  const offset = (page - 1) * 30;
   const { rows } = await pool.query(
     `
     SELECT p.id, p.name, p.image, array_agg(t.name ORDER BY pt.slot) AS types
@@ -88,9 +95,20 @@ pokemonRouter.get("/pokemon", async (req, res) => {
     JOIN types t ON t.id = pt.type_id
     GROUP BY p.id
     ORDER BY p.id
+    OFFSET $1
     LIMIT 30
     `,
+    [offset],
   );
 
-  res.json({ items: rows });
+  const { rows: countRows } = await pool.query(`SELECT count(*) FROM pokemon`);
+  const total = Number(countRows[0].count);
+
+  res.json({
+    items: rows,
+    page,
+    perPage: 30,
+    total,
+    totalPages: Math.ceil(total / 30),
+  });
 });
