@@ -155,6 +155,7 @@ Render 環境變數加 `CORS_ORIGIN` = `https://pokemon-seven-blush.vercel.app,h
 | Render build 失敗 `npm ci` 那步 | package-lock.json 沒 commit | `git add package-lock.json` 推上去 |
 | 部署成功但打 `/pokemon/6` 回 500 | `DATABASE_URL` 沒設或貼錯 | Render 的 Logs 看錯誤，Environment 檢查變數 |
 | `no pg_hba.conf entry` 或 SSL 錯誤 | Neon 要求 SSL | 連線字串結尾要有 `?sslmode=require` |
+| `connect ETIMEDOUT ...:5432` | 公司或學校網路擋了資料庫的 5432 port，本機連不到 Neon | 改用 `.github/workflows/neon-db.yml` 在 GitHub 上跑：連線字串存進 repo 的 Secrets（`NEON_DATABASE_URL`），到 Actions 分頁手動 Run workflow |
 | seed 到一半 `too many connections` | Neon 免費方案連線數有限 | `CONCURRENCY` 降到 5 |
 | 前端 console 出現 CORS error | `CORS_ORIGIN` 沒包含前端網址，或網址多了結尾斜線 | 比對 origin 要完全一樣，沒有結尾 `/` |
 | 第一次打超過 30 秒沒回應 | 免費方案睡著了 | 等它醒，正常；想避免就升級或用 cron 每 10 分鐘打一次 `/health` |
