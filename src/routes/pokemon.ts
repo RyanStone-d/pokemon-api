@@ -1,6 +1,7 @@
 // 寶可夢相關的 endpoint
 import { Router } from "express";
-import { pool } from "../db.js";
+
+import { findPokemonById, listPokemon } from "../repositories/pokemon.js";
 
 export const pokemonRouter = Router();
 
@@ -18,30 +19,11 @@ export const pokemonRouter = Router();
 // }
 pokemonRouter.get("/pokemon/:id", async (req, res) => {
   const id = Number(req.params.id); // 網址裡的 :id，例如 /pokemon/6 這裡就是 6
-
-  // TODO(你)：自己寫 SQL。要拿到這隻寶可夢的所有欄位，加上一個 types 欄位是照 slot 排好的 type 名字陣列。
-  //   網址的 id 用 $1。參考第 4 課第 6 節。
-  const { rows } = await pool.query(
-    `
-    SELECT p.*, array_agg(t.name ORDER BY pt.slot) AS types
-    FROM pokemon p
-    JOIN  pokemon_types pt ON pt.pokemon_id = p.id
-    JOIN types t ON pt.type_id = t.id
-    WHERE p.id = $1
-    GROUP BY p.id
-    ORDER BY p.id
-    `,
-    [id],
-  );
-  const p = rows[0];
-  // p 長這樣：{ id: 6, name: "charizard", height: 1.7, ..., types: ["fire", "flying"] }
-
-  // 找不到這隻（例如 /pokemon/99999），回 404
+  const p = await findPokemonById(id);
   if (!p) {
     res.status(404).json({ error: "Pokemon not found" });
     return;
   }
-
   const {
     name,
     image,
@@ -57,9 +39,6 @@ pokemonRouter.get("/pokemon/:id", async (req, res) => {
     generation_id,
   } = p;
 
-  // TODO(你)：把 p 組成上面註解那個格式回傳。
-  //   大部分欄位直接搬，stats 要把 p.hp、p.attack 那六個包成一個物件，
-  //   generation 對 p.generation_id
   res.json({
     id,
     name,
@@ -85,55 +64,19 @@ pokemonRouter.get("/pokemon", async (req, res) => {
     res.status(400).json({ error: "page must be a positive integer" });
     return;
   }
+  const type = req.query.type as string | undefined;
+  const generation = req.query.generation as string | undefined;
+  const search = req.query.search as string | undefined;
 
-  const offset = (page - 1) * 30;
-  const { type, search, generation } = req.query;
-
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-
-  if (type) {
-    params.push(type);
-    conditions.push(
-      `p.id IN (SELECT pt.pokemon_id FROM pokemon_types pt JOIN types t ON t.id = pt.type_id WHERE t.name = $${params.length})`,
-    );
-  }
-  if (generation) {
-    params.push(generation);
-    conditions.push(`p.generation_id = $${params.length}`);
-  }
-  if (search) {
-    params.push(`%${search}%`);
-    conditions.push(`p.name LIKE $${params.length}`);
-  }
-
-  const where =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const { rows } = await pool.query(
-    `
-  SELECT p.id, p.name, p.image, array_agg(t.name ORDER BY pt.slot) AS types
-  FROM pokemon p
-  JOIN pokemon_types pt ON pt.pokemon_id = p.id
-  JOIN types t ON t.id = pt.type_id
-  ${where}
-  GROUP BY p.id
-  ORDER BY p.id
-  OFFSET $${params.length + 1}
-  LIMIT 30
-  `,
-    [...params, offset],
-  );
-
-  const { rows: countRows } = await pool.query(
-    `SELECT count(*) FROM pokemon p ${where}`,
-    params,
-  );
-
-  const total = Number(countRows[0].count);
+  const { items, total } = await listPokemon({
+    page,
+    type,
+    generation,
+    search,
+  });
 
   res.json({
-    items: rows,
+    items,
     page,
     perPage: 30,
     total,
