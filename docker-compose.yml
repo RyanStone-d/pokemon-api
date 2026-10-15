@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: pokemon
       POSTGRES_DB: pokemon
     ports:
-      - "5433:5432"   # 本機 5433 → 容器 5432，避開你本機已經在跑的 PostgreSQL 18
+      - "127.0.0.1:5433:5432"   # 只開給這台電腦。本機 5433 → 容器 5432，避開本機已經在跑的 PostgreSQL 18
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +21,7 @@ services:
   api:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"   # 只開給這台電腦
     environment:
       DATABASE_URL: postgresql://pokemon:REMOVED@db:5432/pokemon
     depends_on:
