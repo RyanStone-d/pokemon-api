@@ -87,21 +87,49 @@ pokemonRouter.get("/pokemon", async (req, res) => {
   }
 
   const offset = (page - 1) * 30;
+  const { type, search, generation } = req.query;
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (type) {
+    params.push(type);
+    conditions.push(
+      `p.id IN (SELECT pt.pokemon_id FROM pokemon_types pt JOIN types t ON t.id = pt.type_id WHERE t.name = $${params.length})`,
+    );
+  }
+  if (generation) {
+    params.push(generation);
+    conditions.push(`p.generation_id = $${params.length}`);
+  }
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`p.name LIKE $${params.length}`);
+  }
+
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const { rows } = await pool.query(
     `
-    SELECT p.id, p.name, p.image, array_agg(t.name ORDER BY pt.slot) AS types
-    FROM pokemon p
-    JOIN pokemon_types pt ON pt.pokemon_id = p.id
-    JOIN types t ON t.id = pt.type_id
-    GROUP BY p.id
-    ORDER BY p.id
-    OFFSET $1
-    LIMIT 30
-    `,
-    [offset],
+  SELECT p.id, p.name, p.image, array_agg(t.name ORDER BY pt.slot) AS types
+  FROM pokemon p
+  JOIN pokemon_types pt ON pt.pokemon_id = p.id
+  JOIN types t ON t.id = pt.type_id
+  ${where}
+  GROUP BY p.id
+  ORDER BY p.id
+  OFFSET $${params.length + 1}
+  LIMIT 30
+  `,
+    [...params, offset],
   );
 
-  const { rows: countRows } = await pool.query(`SELECT count(*) FROM pokemon`);
+  const { rows: countRows } = await pool.query(
+    `SELECT count(*) FROM pokemon p ${where}`,
+    params,
+  );
+
   const total = Number(countRows[0].count);
 
   res.json({
