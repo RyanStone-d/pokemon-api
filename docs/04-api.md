@@ -14,7 +14,7 @@
 
 ## 概念
 
-先整份讀完再寫程式。這一步會碰到的東西全部在第 1 到 11 節，碰到不懂的回來查。
+先整份讀完再寫程式。遇到不熟的 SQL 語法，查 [sql-syntax.md](sql-syntax.md)。這一步會碰到的東西全部在第 1 到 11 節，碰到不懂的回來查。
 
 最後要做出三個 endpoint：
 
@@ -396,6 +396,101 @@ ORDER BY p.id;
 
 讀的順序：先看 FROM 和 WHERE（第 2 段，決定哪幾隻），再看 SELECT（第 4 段，每一隻要顯示什麼）。兩個括號各自獨立，一個管篩選、一個管顯示。
 
+### 另一種寫法：CTE，把子查詢先取名字
+
+括號塞在裡面不好讀，可以用 `WITH` 先把子查詢抽出來，取個名字，下面當成一張表用：
+
+```sql
+WITH fire_ids AS (                              -- 誰有 fire
+  SELECT pt.pokemon_id
+  FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+  WHERE t.name = 'fire'
+),
+type_lists AS (                                 -- 每隻的 type 陣列
+  SELECT pt.pokemon_id, array_agg(t.name ORDER BY pt.slot) AS types
+  FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+  GROUP BY pt.pokemon_id
+)
+SELECT p.id, p.name, tl.types
+FROM pokemon p
+JOIN type_lists tl ON tl.pokemon_id = p.id
+WHERE p.id IN (SELECT pokemon_id FROM fire_ids)
+ORDER BY p.id;
+```
+
+結果跟上面完全一樣。規則：
+
+- `WITH 名字 AS ( 一句 SELECT )`，好幾個用逗號隔開
+- 最後一定要接一句主查詢
+- 名字只在這一句 SQL 裡有效
+
+`type_lists` 一隻寶可夢一列，所以 JOIN 它不會讓列數變多，這是第 6 節解法三的 CTE 版本。
+
+| | 子查詢塞在裡面 | CTE |
+|---|---|---|
+| 讀的順序 | 從裡往外 | 從上往下 |
+| 結果、速度 | 一樣 | 一樣 |
+
+SQL 一長，實務上大多用 CTE。列表頁兩種都可以。
+
+### 所有寫法比較
+
+每個語法（子查詢、IN、EXISTS、GROUP BY、聚合函式、HAVING、ANY、LATERAL、CTE）的格式、每個部分的意思、資料庫怎麼一步一步跑，都在 [sql-syntax.md](sql-syntax.md)。先讀那份再看這張表。
+
+這個問題是兩件事：**篩選**（誰有 fire）和**收陣列**（每隻的完整 type）。下面每種都在資料庫跑過：
+
+| 寫法 | 結果 |
+|---|---|
+| A1 IN + SELECT 子查詢 | 81 隻，噴火龍 `{fire,flying}` |
+| A2 EXISTS + SELECT 子查詢 | 81 隻，噴火龍 `{fire,flying}` |
+| B CTE | 81 隻，噴火龍 `{fire,flying}` |
+| C JOIN + GROUP BY + HAVING | 81 隻，噴火龍 `{fire,flying}` |
+| D LATERAL | 81 隻，噴火龍 `{fire,flying}` |
+| X JOIN + WHERE + GROUP BY（錯） | 81 隻，噴火龍 `{fire}` |
+
+**A2 EXISTS**：篩選改成「找得到這隻有 fire 的那一列嗎」，跟 IN 意思一樣。
+
+```sql
+WHERE EXISTS (SELECT 1 FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+              WHERE pt.pokemon_id = p.id AND t.name = 'fire')
+```
+
+**C HAVING**：先不篩，每隻完整收成陣列，收完再篩。`HAVING` 是「GROUP BY 之後才做的 WHERE」；`bool_or(條件)` 是「這一組裡只要有一列成立就成立」。
+
+```sql
+SELECT p.id, array_agg(t.name ORDER BY pt.slot) AS types
+FROM pokemon p
+JOIN pokemon_types pt ON pt.pokemon_id = p.id
+JOIN types t ON t.id = pt.type_id
+GROUP BY p.id
+HAVING bool_or(t.name = 'fire');
+```
+
+**D LATERAL**：對每一隻算出陣列接在旁邊，再用 `ANY` 看陣列裡有沒有 fire。PostgreSQL 特有。
+
+```sql
+SELECT p.id, x.types
+FROM pokemon p
+CROSS JOIN LATERAL (
+  SELECT array_agg(t.name ORDER BY pt.slot) AS types
+  FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+  WHERE pt.pokemon_id = p.id
+) x
+WHERE 'fire' = ANY(x.types);
+```
+
+**X 為什麼錯**：WHERE 在 GROUP BY 之前跑，flying 那列先被丟掉。C 改用 HAVING 就對，因為 HAVING 在 GROUP BY 之後。
+
+| 寫法 | 好讀 | 動態條件好不好加 | 實務 |
+|---|---|---|---|
+| A1 IN | 好讀 | 每個條件一個 IN，最直接 | 最常見 |
+| A2 EXISTS | 中等 | 好加 | 跟 IN 一樣常見 |
+| B CTE | 最好讀 | 好加 | SQL 長時首選 |
+| C HAVING | 中等 | type 放 HAVING、其他放 WHERE，要分清楚 | 統計查詢常用 |
+| D LATERAL | 最難 | 好加 | 進階 |
+
+這個資料量速度全部一樣。列表頁建議 A1 或 B。
+
 ---
 
 ## 8. 分頁
@@ -460,7 +555,31 @@ if (search) {
 const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 ```
 
-`$${params.length}` 是在算「這個值是第幾個」：第一個 push 進去的是 `$1`，第二個是 `$2`。三個都帶的時候 `where` 會是：
+### 為什麼編號要用 `params.length` 算
+
+先看想要得到什麼。
+
+**網址 `?type=fire&generation=1`**，想要：
+
+```
+params = ['fire', '1']
+WHERE t.name = $1 AND p.generation_id = $2
+```
+
+**網址 `?generation=1`**（沒帶 type），想要：
+
+```
+params = ['1']
+WHERE p.generation_id = $1
+```
+
+同樣是 generation 的條件，第一個網址要寫 `$2`，第二個要寫 `$1`，看前面有沒有帶 type。所以不能寫死。
+
+解法：值 push 進 params 之後，看 params 現在有幾個，就寫幾號。`params.length` 就是「params 現在有幾個」。
+
+`$${params.length}` 是兩個東西黏在一起：第一個 `$` 是普通的錢字號，後面 `${params.length}` 會換成數字。push 完有 1 個就變 `$1`，有 2 個就變 `$2`。
+
+三個都帶的時候 `where` 會是：
 
 ```sql
 WHERE p.id IN (...$1...) AND p.generation_id = $2 AND p.name LIKE $3
