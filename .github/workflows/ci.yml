@@ -8,14 +8,15 @@ jobs:
     # GitHub 借你一台全新的 Ubuntu 機器
     runs-on: ubuntu-latest
 
-    # 在旁邊起一個 Postgres，設定跟 docker-compose.yml 的 db 一樣
+    # 在旁邊起一個 Postgres。這台機器跑完就銷毀、外面連不到，
+    # 所以直接設成不需要密碼（trust），檔案裡就不用寫任何密碼。
     services:
       db:
         image: postgres:17
         env:
           POSTGRES_USER: pokemon
-          POSTGRES_PASSWORD: pokemon
           POSTGRES_DB: pokemon
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5433:5432
         options: >-
@@ -26,7 +27,7 @@ jobs:
 
     # 所有步驟共用的環境變數，取代本機的 .env（.env 沒有上傳）
     env:
-      DATABASE_URL: postgresql://pokemon:REMOVED@localhost:5433/pokemon
+      DATABASE_URL: postgresql://pokemon@localhost:5433/pokemon
 
     steps:
       # 把 repo 的程式碼拉下來

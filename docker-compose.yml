@@ -1,19 +1,22 @@
 name: pokemon-api
 
+# 帳密都從同一個資料夾的 .env 讀，這個檔案裡不寫真的值。
+# ${名字:?訊息} 的意思是：.env 沒設這個值就直接報錯停下來，不會用空密碼啟動。
+
 services:
   db:
     image: postgres:17
     container_name: pokemon-db
     environment:
-      POSTGRES_USER: pokemon
-      POSTGRES_PASSWORD: pokemon
-      POSTGRES_DB: pokemon
+      POSTGRES_USER: ${POSTGRES_USER:?請在 .env 設定 POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?請在 .env 設定 POSTGRES_DB}
     ports:
       - "127.0.0.1:5433:5432"   # 只開給這台電腦。本機 5433 → 容器 5432，避開本機已經在跑的 PostgreSQL 18
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pokemon -d pokemon"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -23,7 +26,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"   # 只開給這台電腦
     environment:
-      DATABASE_URL: postgresql://pokemon:REMOVED@db:5432/pokemon
+      # container 之間用 service 名字 db 找對方，port 是容器內的 5432
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy

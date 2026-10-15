@@ -118,8 +118,10 @@ docker build -t pokemon-api .
 第一次要兩三分鐘。跑起來：
 
 ```bash
-docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://pokemon:REMOVED@host.docker.internal:5433/pokemon pokemon-api
+docker run --rm -p 127.0.0.1:3000:3000 -e DATABASE_URL="postgresql://pokemon:你的密碼@host.docker.internal:5433/pokemon" pokemon-api
 ```
+
+「你的密碼」換成 `.env` 裡 `POSTGRES_PASSWORD` 的值，這個指令打完不要存進任何檔案。
 
 注意 `host.docker.internal`：container 裡的 `localhost` 是 container 自己，不是你的電腦，要用這個名字才連得到電腦上的 Docker Postgres。瀏覽器打 http://localhost:3000/pokemon/6 應該有噴火龍。Ctrl+C 停掉。
 
@@ -131,16 +133,18 @@ docker run --rm -p 3000:3000 -e DATABASE_URL=postgresql://pokemon:REMOVED@host.d
   api:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      DATABASE_URL: postgresql://pokemon:REMOVED@db:5432/pokemon
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
 ```
 
-兩個重點：
+幾個重點：
 
+- `127.0.0.1:3000:3000`：只開給這台電腦。只寫 `3000:3000` 等於 `0.0.0.0:3000:3000`，同一個網路裡的人都連得進來
+- `${POSTGRES_PASSWORD}`：compose 會自動讀同資料夾的 `.env`，把它換成真的值。帳密只寫在 `.env`，這個檔案會 commit，裡面只放變數名
 - `@db:5432`：compose 裡的 container 可以用 service 名字互相找到，所以是 `db` 不是 localhost，port 是容器內的 5432 不是 5433
 - `depends_on` 加 `service_healthy`：等資料庫 healthcheck 過了才起 API
 
@@ -185,8 +189,9 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_USER: pokemon
-          POSTGRES_PASSWORD: pokemon
           POSTGRES_DB: pokemon
+          # CI 的資料庫跑完就銷毀、外面連不到，設成不需要密碼，檔案裡就不用寫密碼
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5433:5432
         options: >-
@@ -196,7 +201,7 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://pokemon:REMOVED@localhost:5433/pokemon
+      DATABASE_URL: postgresql://pokemon@localhost:5433/pokemon
 
     steps:
       - uses: actions/checkout@v4
