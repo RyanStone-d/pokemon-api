@@ -788,7 +788,7 @@ const TYPES_SUBQUERY = `
 
 B 驗收過再做這題。
 
-1. 新增 `src/repositories/pokemon.ts`，寫 `findPokemonById` 和 `listPokemon`（第 13 節）
+1. 新增 `src/repositories/pokemon.ts`，寫 `findPokemonById` 和 `listPokemon`（第 12 節）
 2. `src/routes/pokemon.ts` 裡的 SQL 全部刪掉，改成呼叫這兩個函式
 3. 檢查 page、決定 404、組回傳 JSON 留在 route
 
