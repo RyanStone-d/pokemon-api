@@ -15,6 +15,22 @@ app.use(
 );
 app.use(express.json());
 
+// 每個請求回應完印一行：方法、網址、狀態碼、花多久，在 Render 的 Logs 看得到
+// /health 每幾秒就被 Render 打一次，不印；跑測試時也不印
+app.use((req, res, next) => {
+  if (req.path === "/health" || process.env.NODE_ENV === "test") {
+    next();
+    return;
+  }
+  const start = Date.now();
+  res.on("finish", () => {
+    console.log(
+      `${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - start}ms`,
+    );
+  });
+  next();
+});
+
 // 健康檢查：上線後雲端平台會定期打這個，確認 server 還活著
 app.get("/health", (_req, res) => {
   res.json({ ok: true, version: 2 });
