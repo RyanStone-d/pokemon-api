@@ -33,14 +33,23 @@ Docker 把這些全部打包成一個 **image**，像一個裝好所有東西的
 一行一個步驟，由上往下：
 
 ```dockerfile
-FROM node:22-alpine          # 從官方 Node 22 的 image 開始（alpine 是精簡版）
-WORKDIR /app                 # 之後的指令都在 /app 裡做
-COPY package*.json ./        # 先只複製 package.json
-RUN npm ci                   # 裝套件（ci 是照 lock 檔裝，比 install 穩）
-COPY . .                     # 再複製全部程式碼
-RUN npm run build            # tsc 編譯成 dist/
-CMD ["node", "dist/src/server.js"]   # container 啟動時跑這個
+# 從官方 Node 22 的 image 開始（alpine 是精簡版）
+FROM node:22-alpine
+# 之後的指令都在 /app 裡做
+WORKDIR /app
+# 先只複製 package.json
+COPY package*.json ./
+# 裝套件（ci 是照 lock 檔裝，比 install 穩）
+RUN npm ci
+# 再複製全部程式碼
+COPY . .
+# tsc 編譯成 dist/
+RUN npm run build
+# container 啟動時跑這個
+CMD ["node", "dist/src/server.js"]
 ```
+
+**注意：Dockerfile 的 `#` 只有在一行開頭才是註解。** 寫在指令後面會被當成指令的一部分，例如 `COPY a b # 說明` 會以為要複製 `#` 和 `說明` 這兩個檔案而失敗。
 
 為什麼 package.json 要先複製、程式碼後複製？Docker 每一步都會快取，程式碼改了但 package.json 沒改，`npm ci` 那步就直接用快取，不用重裝，build 快很多。
 
@@ -61,8 +70,10 @@ RUN npm run build
 FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev              # 不裝 devDependencies
-COPY --from=build /app/dist ./dist # 從階段一拿編譯結果
+# 不裝 devDependencies
+RUN npm ci --omit=dev
+# 從階段一拿編譯結果
+COPY --from=build /app/dist ./dist
 CMD ["node", "dist/src/server.js"]
 ```
 
