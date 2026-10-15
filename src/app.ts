@@ -6,7 +6,13 @@ import { pokemonRouter } from "./routes/pokemon.js";
 
 export const app = express();
 
-app.use(cors()); // 讓前端（不同網域）可以打這個 API
+// 讓前端（不同網域）可以打這個 API
+// CORS_ORIGIN 用逗號分隔允許的網域，例如 "https://a.com,http://localhost:3000"；沒設就允許全部（本機開發、測試）
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN?.split(",") ?? "*",
+  }),
+);
 app.use(express.json());
 
 // 健康檢查：上線後雲端平台會定期打這個，確認 server 還活著
