@@ -1,0 +1,45 @@
+name: CI
+
+# 什麼時候跑：push 到任何 branch、或開 pull request
+on: [push, pull_request]
+
+jobs:
+  test:
+    # GitHub 借你一台全新的 Ubuntu 機器
+    runs-on: ubuntu-latest
+
+    # 在旁邊起一個 Postgres，設定跟 docker-compose.yml 的 db 一樣
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pokemon
+          POSTGRES_PASSWORD: pokemon
+          POSTGRES_DB: pokemon
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pokemon"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # 所有步驟共用的環境變數，取代本機的 .env（.env 沒有上傳）
+    env:
+      DATABASE_URL: postgresql://pokemon:REMOVED@localhost:5433/pokemon
+
+    steps:
+      # 把 repo 的程式碼拉下來
+      - uses: actions/checkout@v4
+      # 裝 Node 22，順便快取 npm 套件，下次比較快
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 建表
+      - run: npm run db:migrate
+      # 匯入全部 1025 隻（選項 B）
+      - run: npm run db:seed
+      # 跑 15 個測試
+      - run: npm test
