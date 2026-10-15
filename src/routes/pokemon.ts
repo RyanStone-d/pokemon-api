@@ -78,3 +78,17 @@ pokemonRouter.get("/pokemon/:id", async (req, res) => {
     generation: generation_id,
   });
 });
+
+pokemonRouter.get("/pokemon", async (req, res) => {
+  const { rows } = await pool.query(
+    `
+    SELECT p.*, array_agg(t.name ORDER BY pt.slot) AS types
+    FROM pokemon p
+    JOIN pokemon_types pt ON pt.pokemon_id = p.id
+    JOIN types t ON t.id = pt.type_id
+    GROUP BY p.id
+    ORDER BY p.id
+    LIMIT 30
+    `,
+  );
+});

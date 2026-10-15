@@ -14,7 +14,7 @@
 
 ## 概念
 
-先整份讀完再寫程式。遇到不熟的 SQL 語法，查 [sql-syntax.md](sql-syntax.md)。這一步會碰到的東西全部在第 1 到 11 節，碰到不懂的回來查。
+先整份讀完再寫程式。遇到不熟的 SQL 語法，查 [sql-syntax.md](sql-syntax.md)。這一步會碰到的東西全部在第 1 到 12 節，碰到不懂的回來查。
 
 最後要做出三個 endpoint：
 
@@ -630,7 +630,118 @@ if (!Number.isInteger(page) || page < 1) {
 
 ---
 
-## 12. 驗收
+## 12. 把 SQL 集中到 repository
+
+### 問題
+
+詳細頁和列表頁都要「寶可夢 + 它的 type 陣列」，兩個 endpoint 各寫一次 JOIN。之後加功能還會再寫，要改的時候得每個地方都找出來改。
+
+### 做法
+
+資料還是分三張表存，但**所有 SQL 集中寫在一個檔案的函式裡**，endpoint 只呼叫函式。這叫 repository（資料存取層），大部分後端專案都是這個結構。
+
+```
+src/
+  routes/          收請求、檢查參數、決定狀態碼、回 JSON。不寫 SQL。
+    meta.ts
+    pokemon.ts
+  repositories/    只寫 SQL，回傳資料。不碰 req、res。
+    meta.ts
+    pokemon.ts
+```
+
+兩邊各管一件事：
+
+| | routes | repositories |
+|---|---|---|
+| 知道 req、res | 是 | 否 |
+| 寫 SQL | 否 | 是 |
+| 決定 400、404 | 是 | 否，找不到就回 `null` |
+| 回傳 | JSON 給前端 | 普通的資料給 route |
+
+### 格式
+
+repository 的函式：
+
+```ts
+import { pool } from '../db.js';
+
+export async function 函式名(參數): Promise<回傳型別> {
+  const { rows } = await pool.query<一列的型別>(`SQL`, [參數]);
+  return rows;          // 或 rows[0] ?? null
+}
+```
+
+- `export`：讓 route 可以 import
+- `async` 和 `Promise<...>`：查資料庫要等，所以是非同步
+- `pool.query<型別>`：告訴 TypeScript 每一列長什麼樣，route 那邊就有欄位提示
+- 找不到的時候回 `null`，**不要在這裡回 404**，那是 route 的事
+
+route 那邊：
+
+```ts
+import { 函式名 } from '../repositories/xxx.js';
+
+router.get('/網址', async (req, res) => {
+  const data = await 函式名(參數);
+  res.json(data);
+});
+```
+
+### 示範：`/types` 和 `/generations` 已經搬好
+
+看 `src/repositories/meta.ts`：
+
+```ts
+export type Option = { id: number; name: string };
+
+export async function listTypes(): Promise<Option[]> {
+  const { rows } = await pool.query<Option>(`
+    SELECT id, name
+    FROM types
+    WHERE id IN (SELECT type_id FROM pokemon_types)
+    ORDER BY id
+  `);
+  return rows;
+}
+```
+
+`src/routes/meta.ts` 變成：
+
+```ts
+metaRouter.get('/types', async (_req, res) => {
+  res.json(await listTypes());
+});
+```
+
+route 裡一行 SQL 都沒有。打 http://localhost:3000/types 結果跟搬之前一模一樣。
+
+### 寶可夢的 repository 要有哪些函式
+
+```ts
+// 一隻，找不到回 null
+findPokemonById(id: number): Promise<PokemonRow | null>
+
+// 一頁，加上符合條件的總數
+listPokemon(filters: { type?: string; generation?: number; search?: string; page: number })
+  : Promise<{ items: PokemonListRow[]; total: number }>
+```
+
+「寶可夢 + type 陣列」那段 SQL 兩個函式都要用，可以抽成一個常數放在檔案最上面，兩個函式共用：
+
+```ts
+const TYPES_SUBQUERY = `
+  (SELECT array_agg(t.name ORDER BY pt.slot)
+     FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+    WHERE pt.pokemon_id = p.id) AS types
+`;
+```
+
+這樣 type 陣列的寫法真的只寫一次。
+
+---
+
+## 13. 驗收
 
 `npm run dev` 跑著，瀏覽器直接開網址，七個都對才算過：
 
@@ -671,7 +782,19 @@ if (!Number.isInteger(page) || page < 1) {
 4. 跑兩句 SQL：資料（第 7 節的寫法加分頁）和 count（第 8 節）
 5. 回傳第 8 節那個格式
 
-寫完照第 12 節逐條測，全過就 commit：「加入 /pokemon 與 /pokemon/:id」。
+寫完照第 13 節逐條測，全過就 commit：「加入 /pokemon 與 /pokemon/:id」。
+
+### C. 把寶可夢的 SQL 搬到 repository
+
+B 驗收過再做這題。
+
+1. 新增 `src/repositories/pokemon.ts`，寫 `findPokemonById` 和 `listPokemon`（第 13 節）
+2. `src/routes/pokemon.ts` 裡的 SQL 全部刪掉，改成呼叫這兩個函式
+3. 檢查 page、決定 404、組回傳 JSON 留在 route
+
+驗收：第 13 節七個網址的結果跟搬之前完全一樣；`src/routes/` 底下搜尋 `pool.query`，一個都找不到。
+
+全過就 commit：「把 SQL 集中到 repositories」。
 
 ---
 
