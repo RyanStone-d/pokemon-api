@@ -1,0 +1,51 @@
+name: Neon 資料庫：建表與匯入
+
+# 只能手動觸發：GitHub repo → Actions → 左邊選這個 workflow → Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "建表之後要不要也匯入寶可夢資料"
+        type: boolean
+        default: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    # Neon 的連線字串放在 repo 的 Secrets，不寫在任何檔案裡
+    # 設定位置：repo → Settings → Secrets and variables → Actions → NEON_DATABASE_URL
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+      - name: 檢查 Secret 有沒有設定
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::找不到 NEON_DATABASE_URL，請到 Settings → Secrets and variables → Actions 新增"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 已經跑過的 migration 會自動跳過，重複按不會壞
+      - run: npm run db:migrate
+      # ON CONFLICT DO NOTHING，重複匯入也不會重複
+      - if: ${{ inputs.seed }}
+        run: npm run db:seed
+      - name: 檢查筆數
+        run: |
+          cat > count.mjs <<'JS'
+          import pg from 'pg';
+          const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+          await c.connect();
+          for (const t of ['generations', 'types', 'pokemon', 'pokemon_types']) {
+            const { rows } = await c.query(`SELECT count(*) FROM ${t}`);
+            console.log(t.padEnd(14), rows[0].count);
+          }
+          await c.end();
+          JS
+          node count.mjs
