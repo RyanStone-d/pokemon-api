@@ -114,13 +114,6 @@ WHERE id IN (SELECT type_id FROM pokemon_types);
 
 括號裡那句先跑，得到一串 type_id（10、3、10、11、…），外面那句再用這串當條件。**順序永遠是先裡面、再外面。**
 
-用 JS 想：
-
-```js
-const usedIds = pokemonTypes.map((pt) => pt.type_id);        // 括號裡那句
-const result = types.filter((t) => usedIds.includes(t.id));  // 外面那句
-```
-
 子查詢可以放在兩個地方，用法不一樣。
 
 ### 放在 WHERE：當名單用
@@ -142,7 +135,30 @@ WHERE id IN (
 
 括號裡：「誰有 fire」的 id 名單，81 個。外面：pokemon 表只留名單上的。
 
-這跟你第 7 題用 JOIN 的寫法結果一樣，差別是：**JOIN 會把寶可夢的列變多**（噴火龍兩個 type 就兩列），**子查詢不會**，pokemon 表還是一隻一列。列表頁要靠這個特性。
+這跟你第 7 題用 JOIN 的寫法結果一樣，差別在列數。同樣查「第一世代」，兩種寫法數出來不一樣：
+
+```sql
+-- 用 JOIN 接 pokemon_types
+SELECT count(*) FROM pokemon p
+JOIN pokemon_types pt ON pt.pokemon_id = p.id
+WHERE p.generation_id = 1;
+--  → 218
+
+-- 不 JOIN
+SELECT count(*) FROM pokemon p
+WHERE p.generation_id = 1;
+--  → 151
+```
+
+第一世代明明只有 151 隻，JOIN 版卻 218 列，因為有兩個 type 的寶可夢被接成兩列：
+
+```
+JOIN 版的噴火龍          不 JOIN 的噴火龍
+ 6 | charizard | 3        6 | charizard
+ 6 | charizard | 10
+```
+
+列表頁一張卡片一隻，所以要一隻一列，FROM 只能有 pokemon 一張表。但「只要火屬性」這個條件又得看 pokemon_types。子查詢就是解法：**條件放在括號裡去查，外面的 pokemon 表不 JOIN**，列數就不會變多。
 
 ### 放在 SELECT：當一個欄位用
 
@@ -212,21 +228,6 @@ id | name      | types
 - `GROUP BY p.id`：id 一樣的列合成一列
 - `array_agg(t.name ORDER BY pt.slot)`：合的時候，type 這欄收成陣列，照 slot 排
 
-用 JS 講同一件事：
-
-```js
-const rows = [
-  { id: 6, name: 'charizard', type: 'fire',   slot: 1 },
-  { id: 6, name: 'charizard', type: 'flying', slot: 2 },
-];
-const result = {
-  id: 6,
-  name: 'charizard',
-  types: rows.sort((a, b) => a.slot - b.slot).map((r) => r.type),
-  //          ↑ ORDER BY pt.slot                 ↑ array_agg(t.name)
-};
-```
-
 GROUP BY 合成一列之後，SELECT 裡的每個欄位分三種情況：
 
 | SELECT 裡的欄位 | 結果 |
@@ -251,10 +252,33 @@ WHERE p.id = 6;
 
 就是第 5 節「放在 SELECT」那種，括號裡對每一隻去查它的 type 陣列。不用 GROUP BY，結果一樣。
 
+### 解法三：先算一張小表再 JOIN
+
+```sql
+SELECT p.id, p.name, c.types
+FROM pokemon p
+JOIN (SELECT pt.pokemon_id, array_agg(t.name ORDER BY pt.slot) AS types
+        FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+       GROUP BY pt.pokemon_id) c
+  ON c.pokemon_id = p.id
+WHERE p.id = 6;
+```
+
+括號裡先算出「每隻寶可夢 → 它的 type 陣列」的小表，再當成一張普通的表接上去。小表一隻一列，所以 JOIN 完不會變多。
+
 ### 什麼時候用哪個
 
-- 詳細頁：兩個都可以，骨架用解法一。
-- **列表頁要用解法二**，原因是下一節。
+三種結果一樣，差在好不好讀、跟篩選能不能混用：
+
+| 寫法 | 好讀 | 跟篩選混用 | 適合 |
+|---|---|---|---|
+| 一 JOIN + GROUP BY | 最常見，大家都看得懂 | WHERE 篩 type 會把其他 type 一起篩掉（下一節的坑） | 詳細頁、純統計 |
+| 二 SELECT 子查詢 | 最直覺，像呼叫函式 | 不受影響 | 列表頁 |
+| 三 小表 JOIN | 最長 | 不受影響 | 同一張小表要拿好幾個值的時候 |
+
+效能上，這個資料量三種沒差，PostgreSQL 會自己找最快的跑法。
+
+實務原則：**預設用一；WHERE 要篩「多的那邊」（像篩 type）時改用二。** 所以詳細頁用一，列表頁用二。
 
 ---
 
@@ -273,26 +297,104 @@ GROUP BY p.id;
 
 噴火龍會出現，但 `types` 變成 `{fire}`，**flying 不見了**。因為 WHERE 先把 flying 那列篩掉，array_agg 收的時候只剩 fire。
 
-正確做法：篩選用第 5 節的 `IN (子查詢)`，聚合用解法二，兩邊互不干擾：
+正確做法：篩選和聚合分開做，各用一個子查詢。最後那句 SQL 看起來很長，其實是四段拼起來的，一段一段跑給你看。
+
+### 第 1 段：名單，誰有 fire
+
+```sql
+SELECT pt.pokemon_id
+FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+WHERE t.name = 'fire';
+```
+
+```
+ pokemon_id
+          4
+          5
+          6
+         37
+         38
+ ...共 81 個
+```
+
+這就是你第 6 題做過的事，只是只拿 id。結果是一串 id。
+
+### 第 2 段：pokemon 表只留名單上的
+
+把第 1 段整句放進括號，當成 `IN` 的名單：
+
+```sql
+SELECT p.id, p.name
+FROM pokemon p
+WHERE p.id IN ( 第 1 段 )
+ORDER BY p.id;
+```
+
+```
+ id | name
+  4 | charmander
+  5 | charmeleon
+  6 | charizard
+ 37 | vulpix
+ 38 | ninetales
+```
+
+注意這裡 **FROM 只有 pokemon 一張表**，沒有 JOIN，所以噴火龍還是一列，不會變兩列。篩選做完了。
+
+### 第 3 段：單獨查一隻的 type 陣列
+
+```sql
+SELECT array_agg(t.name ORDER BY pt.slot)
+FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
+WHERE pt.pokemon_id = 6;
+```
+
+```
+ {fire,flying}
+```
+
+這是第 6 節解法二的括號裡那段，寫死 6 號先試。給它一個 pokemon_id，它回一個陣列。
+
+### 第 4 段：第 2 段的每一列，都加上第 3 段當欄位
+
+把第 3 段放進 SELECT 當一個欄位，寫死的 `6` 換成 `p.id`，意思是「對這一列的寶可夢去查」：
+
+```sql
+SELECT p.id, p.name,
+       ( 第 3 段，6 換成 p.id ) AS types
+FROM pokemon p
+WHERE p.id IN ( 第 1 段 )
+ORDER BY p.id;
+```
+
+```
+ id | name       | types
+  4 | charmander | {fire}
+  5 | charmeleon | {fire}
+  6 | charizard  | {fire,flying}
+ 37 | vulpix     | {fire}
+ 38 | ninetales  | {fire}
+```
+
+噴火龍的 types 是 `{fire,flying}`，flying 還在，因為第 3 段是獨立去查的，不受第 1 段的篩選影響。
+
+### 拼起來的完整版
 
 ```sql
 SELECT p.id, p.name, p.image,
-       (SELECT array_agg(t.name ORDER BY pt.slot)
-          FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
-         WHERE pt.pokemon_id = p.id) AS types
+       (SELECT array_agg(t.name ORDER BY pt.slot)              -- ┐
+          FROM pokemon_types pt JOIN types t ON t.id = pt.type_id   -- │ 第 3 段：這一隻的 type 陣列
+         WHERE pt.pokemon_id = p.id) AS types                  -- ┘
 FROM pokemon p
 WHERE p.id IN (
-  SELECT pt.pokemon_id
-  FROM pokemon_types pt JOIN types t ON t.id = pt.type_id
-  WHERE t.name = 'fire'
+  SELECT pt.pokemon_id                                         -- ┐
+  FROM pokemon_types pt JOIN types t ON t.id = pt.type_id      -- │ 第 1 段：誰有 fire 的名單
+  WHERE t.name = 'fire'                                        -- ┘
 )
 ORDER BY p.id;
 ```
 
-- `WHERE p.id IN (...)`：先找出「誰有 fire」的名單，只留名單裡的
-- SELECT 裡的子查詢：每一隻的 type 完整收，不受篩選影響
-
-噴火龍的 types 就會是 `{fire,flying}`。
+讀的順序：先看 FROM 和 WHERE（第 2 段，決定哪幾隻），再看 SELECT（第 4 段，每一隻要顯示什麼）。兩個括號各自獨立，一個管篩選、一個管顯示。
 
 ---
 

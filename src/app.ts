@@ -2,6 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import { metaRouter } from './routes/meta.js';
+import { pokemonRouter } from './routes/pokemon.js';
 
 export const app = express();
 
@@ -14,6 +15,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use(metaRouter);
+app.use(pokemonRouter);
 
 // 找不到路由
 app.use((_req, res) => {
