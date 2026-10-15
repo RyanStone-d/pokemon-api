@@ -82,7 +82,7 @@ seed 大概幾分鐘。完成後到 Neon 的 **Tables** 頁，四張表都在，
    | 欄位 | 填 |
    |---|---|
    | Name | pokemon-api |
-   | Region | Singapore |
+   | Region | 跟 Neon 同一區。Neon 在 AWS US East 1 就選 Virginia (US East)，在 Singapore 就選 Singapore。不同區每個查詢都要跨洋，慢很多 |
    | Runtime | Docker（它會自己讀你的 Dockerfile） |
    | Instance Type | Free |
 
@@ -111,8 +111,9 @@ seed 大概幾分鐘。完成後到 Neon 的 **Tables** 頁，四張表都在，
 Render 預設 **Auto-Deploy** 是開的：push 到 main，它就重新 build 部署。試一次：
 
 1. 改 `/health` 回傳多一個欄位 `{ ok: true, version: 2 }`
-2. commit、push
-3. 到 Render 頁面看它在 build，完成後打 `/health` 看到 version 2
+2. `src/app.test.ts` 的 `/health` 測試是 `toEqual({ ok: true })`，回傳多了欄位它會紅。先跑 `npm test` 看它紅，再把預期改成新的樣子，跑到綠
+3. commit、push
+4. 到 Render 頁面看它在 build，完成後打 `/health` 看到 version 2
 
 這樣以後改程式只要 push，CI 跑測試、Render 自動部署，不用手動碰。
 

@@ -10,7 +10,7 @@ describe("GET /health", () => {
   test("回 ok", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    expect(res.body).toEqual({ ok: true, version: 2 });
   });
 });
 
@@ -65,7 +65,12 @@ describe("GET /pokemon", () => {
     const res = await request(app).get("/pokemon");
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(30);
-    expect(res.body).toMatchObject({ page: 1, perPage: 30, total: 1025, totalPages: 35 });
+    expect(res.body).toMatchObject({
+      page: 1,
+      perPage: 30,
+      total: 1025,
+      totalPages: 35,
+    });
     expect(res.body.items[0]).toEqual({
       id: 1,
       name: "bulbasaur",
@@ -79,7 +84,11 @@ describe("GET /pokemon", () => {
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(81);
     expect(res.body.totalPages).toBe(3);
-    expect(res.body.items.every((p: { types: string[] }) => p.types.includes("fire"))).toBe(true);
+    expect(
+      res.body.items.every((p: { types: string[] }) =>
+        p.types.includes("fire"),
+      ),
+    ).toBe(true);
     const charizard = res.body.items.find((p: { id: number }) => p.id === 6);
     expect(charizard.types).toEqual(["fire", "flying"]);
   });
@@ -93,7 +102,9 @@ describe("GET /pokemon", () => {
   test("search=char：7 隻，名字都含 char", async () => {
     const res = await request(app).get("/pokemon?search=char");
     expect(res.body.total).toBe(7);
-    expect(res.body.items.every((p: { name: string }) => p.name.includes("char"))).toBe(true);
+    expect(
+      res.body.items.every((p: { name: string }) => p.name.includes("char")),
+    ).toBe(true);
   });
 
   test("generation=1&search=char：3 隻", async () => {
