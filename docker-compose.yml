@@ -18,5 +18,15 @@ services:
       timeout: 3s
       retries: 10
 
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://pokemon:REMOVED@db:5432/pokemon
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

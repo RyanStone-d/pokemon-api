@@ -11,7 +11,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:psql": "docker compose exec db psql -U pokemon -d pokemon",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsc -p .",
+    "start": "node dist/src/server.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
