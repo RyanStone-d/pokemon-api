@@ -82,7 +82,7 @@ pokemonRouter.get("/pokemon/:id", async (req, res) => {
 pokemonRouter.get("/pokemon", async (req, res) => {
   const { rows } = await pool.query(
     `
-    SELECT p.*, array_agg(t.name ORDER BY pt.slot) AS types
+    SELECT p.id, p.name, p.image, array_agg(t.name ORDER BY pt.slot) AS types
     FROM pokemon p
     JOIN pokemon_types pt ON pt.pokemon_id = p.id
     JOIN types t ON t.id = pt.type_id
@@ -91,4 +91,6 @@ pokemonRouter.get("/pokemon", async (req, res) => {
     LIMIT 30
     `,
   );
+
+  res.json({ items: rows });
 });
