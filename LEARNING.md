@@ -33,8 +33,8 @@ PokéNexus（你的前端，https://pokemon-seven-blush.vercel.app/）現在直�
 | 2 匯入資料 | `scripts/seed.ts` | INSERT、參數化查詢、transaction、可重跑的腳本 | pokemon 表 1025 列 | ✅ |
 | 3 查詢 | `db/queries.sql` | WHERE、LIKE、分頁、JOIN、子查詢 | 8 題答案全對 | ✅ |
 | 4 API | `docs/04-api.md` | Express 路由、req/res、聚合、動態條件、400/404/500 | 第 13 節網址全對 | ✅ |
-| 5 測試 | `docs/05-testing.md` | vitest + supertest 測 endpoint | `npm test` 全綠 | ← 現在 |
-| 6 容器與 CI | `docs/06-docker-ci.md` | Dockerfile、docker compose、GitHub Actions | `docker compose up` 整套起來；GitHub 綠勾 | |
+| 5 測試 | `docs/05-testing.md` | vitest + supertest 測 endpoint | `npm test` 全綠 | ✅ |
+| 6 容器與 CI | `docs/06-docker-ci.md` | Dockerfile、docker compose、GitHub Actions | `docker compose up` 整套起來；GitHub 綠勾 | ← 現在 |
 | 7 部署 | `docs/07-deploy.md` | Neon、Render、環境變數、雲端跑 migration | 公開網址打得到 | |
 | 8 前端接上（選） | `docs/08-frontend.md` | 改 PokéNexus 打新 API | 前端列表頁一次打一個請求 | |
 | 9 登入（選） | `docs/09-auth.md` | 密碼雜湊、JWT、保護路由 | Exchange 頁需要登入 | |

@@ -19,6 +19,10 @@ export const pokemonRouter = Router();
 // }
 pokemonRouter.get("/pokemon/:id", async (req, res) => {
   const id = Number(req.params.id); // 網址裡的 :id，例如 /pokemon/6 這裡就是 6
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: "id must be a positive integer" });
+    return;
+  }
   const p = await findPokemonById(id);
   if (!p) {
     res.status(404).json({ error: "Pokemon not found" });
